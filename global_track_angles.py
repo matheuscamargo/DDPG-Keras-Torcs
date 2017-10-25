@@ -34,36 +34,41 @@ class Turn(object):
         arc = self.arc * distance_in_m / self.get_length_in_m()
         return 90 - arc
 
+class TrackAngles(object):
+    def __load_segments__(self, track_segments):
+        for element in track_segments:
+            segment_type = element.find(".//attstr[@name='type']")
+            type_str = segment_type.attrib.get('val')
+
+            if type_str == "str":
+                segment_length = element.find(".//attnum[@name='lg']")
+                length_str = segment_length.attrib.get('val')
+                self.segments_list.append(Straight(float(length_str)))
+            elif type_str == "lft" or type_str == "rgt":
+                segment_radius = element.find(".//attnum[@name='radius']")
+                segment_arc = element.find(".//attnum[@name='arc']")
+                radius_str = segment_radius.attrib.get('val')
+                arc_str = segment_arc.attrib.get('val')
+                self.segments_list.append(Turn(float(radius_str), float(arc_str)))
+
+    def __init__(self, track_path):
+        content = open(track_path, 'r').read()
+        # Remove lines starting with '&'
+        content = re.sub(r"\n\s*&.*", "\n", content)
+        tree = xml.fromstring(content)
+        track_segments = tree.find(".//section[@name='Track Segments']")
+        self.segments_list = []
+        self.__load_segments__(track_segments)
+
+    def print_list_info(self):
+        for element in self.segments_list:
+            element.print_info()
+
 def main():
-    """Main function for testing"""
     tracks_path = "../../gym_torcs/vtorcs-RL-color/data/tracks"
-    content = open(tracks_path + "/g-track-1/g-track-1.xml", 'r').read()
-
-    # Remove lines starting with '&'
-    content = re.sub(r"\n\s*&.*", "\n", content)
-
-    tree = xml.fromstring(content)
-    track_segments = tree.find(".//section[@name='Track Segments']")
-
-    segments_list = []
-
-    for element in track_segments:
-        segment_type = element.find(".//attstr[@name='type']")
-        type_str = segment_type.attrib.get('val')
-
-        if type_str == "str":
-            segment_length = element.find(".//attnum[@name='lg']")
-            length_str = segment_length.attrib.get('val')
-            segments_list.append(Straight(float(length_str)))
-        elif type_str == "lft" or type_str == "rgt":
-            segment_radius = element.find(".//attnum[@name='radius']")
-            segment_arc = element.find(".//attnum[@name='arc']")
-            radius_str = segment_radius.attrib.get('val')
-            arc_str = segment_arc.attrib.get('val')
-            segments_list.append(Turn(float(radius_str), float(arc_str)))
-
-    for element in segments_list:
-        element.print_info()
+    track_xml = "/g-track-1/g-track-1.xml"
+    angles = TrackAngles(tracks_path + track_xml)
+    angles.print_list_info()
 
 if __name__ == "__main__":
     main()
