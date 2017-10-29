@@ -10,3 +10,6 @@ xte 'usleep 100000'
 xte 'key Return'
 xte 'usleep 100000'
 xte 'key Return'
+xte 'usleep 100000'
+# Change camera to first person view.
+xte 'key F2'
