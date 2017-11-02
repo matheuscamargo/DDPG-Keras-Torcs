@@ -14,6 +14,7 @@ from ReplayBuffer import ReplayBuffer
 from ActorNetwork import ActorNetwork
 from CriticNetwork import CriticNetwork
 from OU import OU
+from global_track_angles import TrackAngles
 import timeit
 
 OU = OU()       #Ornstein-Uhlenbeck Process
@@ -25,9 +26,13 @@ def playGame(train_indicator=1):    #1 means Train, 0 means simply Run
     TAU = 0.001     #Target Network HyperParameters
     LRA = 0.0001    #Learning rate for Actor
     LRC = 0.001     #Lerning rate for Critic
+    TRACKS_PATH = "../../gym_torcs/vtorcs-RL-color/data/tracks"
+    TRACK_XML = "/g-track-1/g-track-1.xml"
+    NUMBER_OF_ANGLES = 10
+    ANGLE_INTERVAL_IN_M = 10
 
     action_dim = 3  #Steering/Acceleration/Brake
-    state_dim = 29  #of sensors input
+    state_dim = 10 + NUMBER_OF_ANGLES  #of sensors input
 
     np.random.seed(1337)
 
@@ -52,6 +57,8 @@ def playGame(train_indicator=1):    #1 means Train, 0 means simply Run
     actor = ActorNetwork(sess, state_dim, action_dim, BATCH_SIZE, TAU, LRA)
     critic = CriticNetwork(sess, state_dim, action_dim, BATCH_SIZE, TAU, LRC)
     buff = ReplayBuffer(BUFFER_SIZE)    #Create replay buffer
+
+    angles = TrackAngles(TRACKS_PATH + TRACK_XML, NUMBER_OF_ANGLES, ANGLE_INTERVAL_IN_M)
 
     # Generate a Torcs environment
     env = TorcsEnv(vision=vision, throttle=True,gear_change=False)
@@ -79,7 +86,10 @@ def playGame(train_indicator=1):    #1 means Train, 0 means simply Run
         else:
             ob = env.reset()
 
-        s_t = np.hstack((ob.angle, ob.track, ob.trackPos, ob.speedX, ob.speedY,  ob.speedZ, ob.wheelSpinVel/100.0, ob.rpm))
+        current_angles = angles.get_angles_in_rad_from_distance(ob.trackDist)
+        ob_angles = np.array(current_angles, dtype=np.float32)/3.1416
+
+        s_t = np.hstack((ob.angle, ob_angles, ob.trackPos, ob.speedX, ob.speedY,  ob.speedZ, ob.wheelSpinVel/100.0, ob.rpm))
      
         total_reward = 0.
         for j in range(max_steps):
@@ -103,8 +113,10 @@ def playGame(train_indicator=1):    #1 means Train, 0 means simply Run
             a_t[0][2] = a_t_original[0][2] + noise_t[0][2]
 
             ob, r_t, done, info = env.step(a_t[0])
+            current_angles = angles.get_angles_in_rad_from_distance(ob.trackDist)
+            ob_angles = np.array(current_angles, dtype=np.float32)/3.1416
 
-            s_t1 = np.hstack((ob.angle, ob.track, ob.trackPos, ob.speedX, ob.speedY, ob.speedZ, ob.wheelSpinVel/100.0, ob.rpm))
+            s_t1 = np.hstack((ob.angle, ob_angles, ob.trackPos, ob.speedX, ob.speedY, ob.speedZ, ob.wheelSpinVel/100.0, ob.rpm))
         
             buff.add(s_t, a_t[0], r_t, s_t1, done)      #Add replay buffer
             
@@ -136,7 +148,7 @@ def playGame(train_indicator=1):    #1 means Train, 0 means simply Run
             total_reward += r_t
             s_t = s_t1
         
-            print("Episode", i, "Step", step, "Dist", ob.trackDist, "Action", a_t, "Reward", r_t, "Loss", loss)
+            print("Episode", i, "Step", step, "Dist", ob.trackDist, "Angles", ob_angles, "Action", a_t, "Reward", r_t, "Loss", loss)
         
             step += 1
             if done:
